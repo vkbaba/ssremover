@@ -62,8 +62,11 @@ const (
 	envUserName = "GOVMOMI_USERNAME"
 	envPassword = "GOVMOMI_PASSWORD"
 	envInsecure = "GOVMOMI_INSECURE"
-)
+	envHostName = "GOVMOMI_HOST"
+	envClusterName = "GOVMOMI_CLUSTER"
 
+)
+// Flags
 var urlDescription = fmt.Sprintf("ESX or vCenter URL [%s]", envURL)
 var urlFlag = flag.String("url", getEnvString(envURL, ""), urlDescription)
 
@@ -72,6 +75,31 @@ var insecureFlag = flag.Bool("insecure", getEnvBool(envInsecure, false), insecur
 
 var allDescription = fmt.Sprintf("If present, delete snapshots across all VMs")
 var allFlag = flag.Bool("all", false, allDescription)
+
+var hostDescription = fmt.Sprintf("Delete snapshots across VMs on a specific host [%s]", envHostName)
+var hostFlag = flag.String("host", getEnvString(envHostName, ""), hostDescription)
+
+var clusterDescription = fmt.Sprintf("Delete snapshots across VMs on a specific cluster [%s]", envClusterName)
+var clusterFlag = flag.String("cluster", getEnvString(envClusterName, ""), clusterDescription)
+
+func checkFlags () bool {
+	var flags []int
+	var sum int = 0
+
+	if (*hostFlag == "") {flags = append(flags, 0)} else {flags = append(flags, 1)}
+	if (*clusterFlag == "") {flags = append(flags, 0)} else {flags = append(flags, 1)}
+	if !(*allFlag) {flags = append(flags, 0)} else {flags = append(flags, 1)}
+
+	for _ , f := range flags {
+		sum += f
+	}
+
+	if sum == 1 {
+		return true
+	} else {
+		return false
+	}
+}
 
 
 func processOverride(u *url.URL) {
@@ -127,7 +155,7 @@ func Run(f func(context.Context, *vim25.Client) error) {
 	flag.Parse()
 
 	var err error
-	if *urlFlag == "" {
+	if *urlFlag == "" || !(checkFlags()) {
 		err = simulator.VPX().Run(f)
 	} else {
 		ctx := context.Background()
@@ -159,8 +187,7 @@ func main() {
 		// Retrieve summary property for all hosts
 		// Reference: http://pubs.vmware.com/vsphere-60/topic/com.vmware.wssdk.apiref.doc/vim.HostSystem.html
 		var hss []mo.HostSystem
-		
-		err = v.Retrieve(ctx, []string{"HostSystem"}, []string{"Summary"}, &hss)
+		err = v.Retrieve(ctx, []string{"HostSystem"}, []string{"summary"}, &hss)
 		if err != nil {
 			return err
 		}
